@@ -1,0 +1,84 @@
+# Multi-stage build for production
+# Override when server cannot reach Docker Hub: --build-arg NODE_IMAGE=docker.m.daocloud.io/library/node:22-alpine
+ARG NODE_IMAGE=node:22-alpine
+FROM ${NODE_IMAGE} AS builder
+
+WORKDIR /app
+
+# Install pnpm
+RUN npm install -g pnpm
+
+# Copy package files, lockfile, and pnpm config
+COPY package.json pnpm-lock.yaml .npmrc ./
+
+# Install dependencies using pnpm with retry-friendly config
+RUN pnpm config set fetch-retries 3 && \
+    pnpm config set fetch-retry-mintimeout 20000 && \
+    pnpm config set fetch-retry-maxtimeout 60000 && \
+    pnpm config set fetch-timeout 120000 && \
+    (pnpm install --frozen-lockfile || \
+        (echo "Warning: lockfile out of sync, running pnpm install..." && \
+        pnpm install)) && \
+    pnpm store prune
+
+# Copy source code
+COPY . .
+
+# Clear Next.js cache to ensure clean build
+RUN rm -rf .next
+
+# Build the application
+RUN pnpm run build
+
+# Production stage
+ARG NODE_IMAGE=node:22-alpine
+FROM ${NODE_IMAGE} AS production
+
+# Install dumb-init, wget for health checks, and sharp dependencies
+RUN apk add --no-cache dumb-init wget vips-dev
+
+# Create app user
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nextjs -u 1001
+
+WORKDIR /app
+
+# Copy built application from builder stage
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+
+# Install sharp + its Alpine/musl prebuilt binary in an isolated dir,
+# then copy into standalone node_modules (remove any existing symlinks first)
+RUN cd /tmp && npm init -y && \
+    npm install --ignore-scripts sharp && \
+    npm install @img/sharp-linuxmusl-x64 && \
+    rm -rf /app/node_modules/sharp /app/node_modules/@img/sharp-linuxmusl-x64 && \
+    mkdir -p /app/node_modules/@img && \
+    cp -r /tmp/node_modules/sharp /app/node_modules/sharp && \
+    cp -r /tmp/node_modules/@img/sharp-linuxmusl-x64 /app/node_modules/@img/sharp-linuxmusl-x64 && \
+    rm -rf /tmp/package.json /tmp/package-lock.json /tmp/node_modules
+
+# App-owned tmp and "let" placeholders (buggy deps touch/chmod these; only /app paths are writable by nextjs)
+RUN mkdir -p /app/.tmp && touch /app/let /app/.tmp/let && \
+    chown -R nextjs:nodejs /app/.tmp /app/let && chmod 666 /app/let /app/.tmp/let
+# run-with-guard.js redirects *let paths to /tmp/giip-tmp/let — precreate as root so nextjs never hits EACCES on cold /tmp
+RUN mkdir -p /tmp/giip-tmp && touch /tmp/giip-tmp/let && chmod 1777 /tmp/giip-tmp && chmod 666 /tmp/giip-tmp/let
+# Guard script: suppress uncaughtException from deps that EACCES/EPERM on *let paths so process does not exit
+COPY scripts/run-with-guard.js ./scripts/
+RUN chown nextjs:nodejs /app/scripts/run-with-guard.js
+ENV TMPDIR=/app/.tmp/
+ENV TMP=/app/.tmp/
+ENV TEMP=/app/.tmp/
+ENV NODE_OPTIONS="--max-old-space-size=2048 --enable-source-maps"
+
+# Switch to non-root user
+USER nextjs
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD sh -c "if wget --no-verbose --tries=1 --spider --timeout=5 http://localhost:3000/api/health 2>&1 | grep -qE '200|saved|HTTP'; then exit 0; elif pgrep -f 'node' >/dev/null; then exit 0; else exit 1; fi"
+
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["sh", "-c", "export TMPDIR=/app/.tmp/ TMP=/app/.tmp/ TEMP=/app/.tmp/ && echo 'Starting Next.js server...' && node scripts/run-with-guard.js"]

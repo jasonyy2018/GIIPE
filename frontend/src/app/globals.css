@@ -1,0 +1,913 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles for smooth scrolling and transitions */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Mobile menu button — visibility is controlled in PublicLayout (e.g. md:hidden).
+   Do NOT set display:none here: this file loads after @tailwind utilities and would
+   override Tailwind display utilities on all breakpoints. */
+.mobile-menu-btn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 8px 12px;
+  z-index: 110;
+}
+
+/* Mobile menu slide animation */
+.nav-links {
+  transition: left 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Mobile menu active state */
+#mobile-nav-drawer.active {
+  left: 0 !important;
+}
+
+/* Menu overlay active state */
+.menu-overlay.active {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* Back to top button active state */
+.back-to-top.active {
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: translateY(0) !important;
+}
+
+/* Slider transform */
+.slider {
+  transition: transform 0.5s ease;
+}
+
+/* ===== ACCESSIBILITY STYLES ===== */
+
+/* Screen reader only content */
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+/* Screen reader only content that becomes visible on focus */
+.sr-only-focusable:focus {
+  position: static !important;
+  width: auto !important;
+  height: auto !important;
+  padding: 0.5rem !important;
+  margin: 0 !important;
+  overflow: visible !important;
+  clip: auto !important;
+  white-space: normal !important;
+  background: #000 !important;
+  color: #fff !important;
+  z-index: 9999 !important;
+}
+
+/* Focus styles for accessibility */
+a:focus,
+button:focus,
+input:focus,
+select:focus,
+textarea:focus,
+[tabindex]:focus {
+  outline: 3px solid #E63946;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px rgba(230, 57, 70, 0.2);
+}
+
+/* Enhanced focus indicators */
+.focus-visible:focus {
+  outline: 3px solid #E63946;
+  outline-offset: 2px;
+}
+
+/* Skip links */
+.skip-links {
+  position: fixed;
+  top: -100px;
+  left: 0;
+  z-index: 9999;
+  background: #000;
+  color: #fff;
+  padding: 8px;
+  transition: top 0.3s ease;
+}
+
+.skip-link {
+  display: block;
+  color: #fff;
+  text-decoration: none;
+  padding: 4px 8px;
+  margin: 2px 0;
+  border-radius: 4px;
+}
+
+.skip-link:focus {
+  background: #E63946;
+  outline: 2px solid #fff;
+}
+
+/* Skip to main content link */
+.skip-to-main {
+  position: absolute;
+  left: -9999px;
+  z-index: 999;
+  padding: 1em;
+  background-color: #E63946;
+  color: white;
+  text-decoration: none;
+}
+
+.skip-to-main:focus {
+  left: 50%;
+  transform: translateX(-50%);
+  top: 10px;
+}
+
+/* High contrast mode */
+.high-contrast {
+  --bg-primary: #000000;
+  --bg-secondary: #1a1a1a;
+  --bg-tertiary: #333333;
+  --text-primary: #ffffff;
+  --text-secondary: #e0e0e0;
+  --border-color: #ffffff;
+  --link-color: #00ffff;
+  --link-hover: #ffff00;
+  --button-bg: #ffffff;
+  --button-text: #000000;
+  --focus-color: #ffff00;
+  --success-color: #00ff00;
+  --warning-color: #ffaa00;
+  --error-color: #ff0000;
+  --info-color: #00aaff;
+}
+
+.high-contrast * {
+  background-color: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+.high-contrast a {
+  color: var(--link-color) !important;
+  text-decoration: underline !important;
+}
+
+.high-contrast a:hover,
+.high-contrast a:focus {
+  color: var(--link-hover) !important;
+  background-color: var(--bg-secondary) !important;
+}
+
+.high-contrast button,
+.high-contrast input[type="button"],
+.high-contrast input[type="submit"] {
+  background-color: var(--button-bg) !important;
+  color: var(--button-text) !important;
+  border: 2px solid var(--border-color) !important;
+}
+
+.high-contrast :focus {
+  outline: 3px solid var(--focus-color) !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 1px var(--focus-color) !important;
+}
+
+/* High contrast widget styles */
+.high-contrast .dashboard-widget,
+.high-contrast [role="region"] {
+  background-color: var(--bg-secondary) !important;
+  border: 2px solid var(--border-color) !important;
+}
+
+.high-contrast .dashboard-widget:focus,
+.high-contrast [role="region"]:focus {
+  background-color: var(--bg-tertiary) !important;
+  border-color: var(--focus-color) !important;
+}
+
+/* High contrast status indicators */
+.high-contrast .text-green-500,
+.high-contrast .bg-green-500 {
+  color: var(--success-color) !important;
+  background-color: var(--bg-secondary) !important;
+  border: 1px solid var(--success-color) !important;
+}
+
+.high-contrast .text-yellow-500,
+.high-contrast .bg-yellow-500 {
+  color: var(--warning-color) !important;
+  background-color: var(--bg-secondary) !important;
+  border: 1px solid var(--warning-color) !important;
+}
+
+.high-contrast .text-red-500,
+.high-contrast .bg-red-500 {
+  color: var(--error-color) !important;
+  background-color: var(--bg-secondary) !important;
+  border: 1px solid var(--error-color) !important;
+}
+
+.high-contrast .text-blue-500,
+.high-contrast .bg-blue-500 {
+  color: var(--info-color) !important;
+  background-color: var(--bg-secondary) !important;
+  border: 1px solid var(--info-color) !important;
+}
+
+/* High contrast form elements */
+.high-contrast input,
+.high-contrast select,
+.high-contrast textarea {
+  background-color: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+  border: 2px solid var(--border-color) !important;
+}
+
+.high-contrast input:focus,
+.high-contrast select:focus,
+.high-contrast textarea:focus {
+  border-color: var(--focus-color) !important;
+  box-shadow: 0 0 0 2px var(--focus-color) !important;
+}
+
+/* High contrast loading states */
+.high-contrast .loading-spinner {
+  border-color: var(--border-color) !important;
+  border-top-color: var(--focus-color) !important;
+}
+
+/* High contrast modal and overlay */
+.high-contrast .modal-overlay {
+  background-color: rgba(0, 0, 0, 0.9) !important;
+}
+
+.high-contrast .modal-content {
+  background-color: var(--bg-primary) !important;
+  border: 3px solid var(--border-color) !important;
+}
+
+/* Reduced motion preferences */
+.reduced-motion,
+.reduced-motion * {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+.reduced-motion .slider {
+  transition: none !important;
+}
+
+.reduced-motion .nav-links {
+  transition: none !important;
+}
+
+.reduced-motion .menu-overlay {
+  transition: none !important;
+}
+
+/* Large text mode */
+.large-text {
+  font-size: 120% !important;
+}
+
+.large-text h1 {
+  font-size: 2.5rem !important;
+}
+
+.large-text h2 {
+  font-size: 2rem !important;
+}
+
+.large-text h3 {
+  font-size: 1.75rem !important;
+}
+
+.large-text h4 {
+  font-size: 1.5rem !important;
+}
+
+.large-text h5 {
+  font-size: 1.25rem !important;
+}
+
+.large-text h6 {
+  font-size: 1.125rem !important;
+}
+
+.large-text p,
+.large-text li,
+.large-text span {
+  font-size: 1.125rem !important;
+  line-height: 1.6 !important;
+}
+
+.large-text button,
+.large-text input,
+.large-text select,
+.large-text textarea {
+  font-size: 1.125rem !important;
+  padding: 12px 16px !important;
+}
+
+/* Keyboard navigation indicators */
+.keyboard-navigation-active *:focus {
+  outline: 3px solid #E63946 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 1px rgba(230, 57, 70, 0.3) !important;
+}
+
+/* Enhanced focus indicators for interactive elements */
+.keyboard-navigation-active button:focus,
+.keyboard-navigation-active a:focus,
+.keyboard-navigation-active input:focus,
+.keyboard-navigation-active select:focus,
+.keyboard-navigation-active textarea:focus,
+.keyboard-navigation-active [tabindex]:focus {
+  background-color: rgba(230, 57, 70, 0.1) !important;
+  border-color: #E63946 !important;
+}
+
+/* Widget focus indicators */
+.dashboard-widget:focus,
+[role="region"]:focus {
+  outline: 3px solid #E63946 !important;
+  outline-offset: 4px !important;
+  background-color: rgba(230, 57, 70, 0.05) !important;
+}
+
+/* Focus trap for modals and overlays */
+.focus-trap {
+  position: relative;
+}
+
+.focus-trap::before,
+.focus-trap::after {
+  content: '';
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Dynamic content announcements */
+.dynamic-content-update {
+  position: relative;
+}
+
+.dynamic-content-update::after {
+  content: attr(data-update-message);
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* Loading state accessibility */
+.loading-content {
+  position: relative;
+}
+
+.loading-content::before {
+  content: 'Loading content, please wait';
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.loading-content[aria-busy="true"]::before {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  background: #f3f4f6;
+  color: #374151;
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+  margin-bottom: 0.5rem;
+}
+
+/* Color blindness support */
+.colorblind-support .text-red-500,
+.colorblind-support .bg-red-500 {
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.1) 2px,
+    rgba(0, 0, 0, 0.1) 4px
+  );
+}
+
+.colorblind-support .text-green-500,
+.colorblind-support .bg-green-500 {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.1) 2px,
+    rgba(0, 0, 0, 0.1) 4px
+  );
+}
+
+/* Improved button accessibility */
+button:disabled,
+input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+button:disabled:focus,
+input:disabled:focus {
+  outline: 2px solid #999;
+}
+
+/* Enhanced form accessibility */
+.form-group {
+  position: relative;
+  margin-bottom: 1rem;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+.form-input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #d1d5db;
+  border-radius: 0.375rem;
+  font-size: 1rem;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.form-input:focus {
+  border-color: #E63946;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(230, 57, 70, 0.1);
+}
+
+.form-error {
+  color: #dc2626;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
+.form-help {
+  color: #6b7280;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
+/* Loading states accessibility */
+.loading-spinner {
+  border: 2px solid #f3f4f6;
+  border-top: 2px solid #E63946;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  animation: spin 1s linear infinite;
+}
+
+.reduced-motion .loading-spinner {
+  animation: none;
+  border-top-color: #E63946;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Tooltip accessibility */
+.tooltip {
+  position: relative;
+  display: inline-block;
+}
+
+.tooltip-content {
+  visibility: hidden;
+  opacity: 0;
+  position: absolute;
+  z-index: 1000;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #1f2937;
+  color: #ffffff;
+  text-align: center;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  white-space: nowrap;
+  transition: opacity 0.3s, visibility 0.3s;
+}
+
+.tooltip:hover .tooltip-content,
+.tooltip:focus .tooltip-content {
+  visibility: visible;
+  opacity: 1;
+}
+
+.reduced-motion .tooltip-content {
+  transition: none;
+}
+
+/* Modal accessibility */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+}
+
+.modal-content:focus {
+  outline: none;
+}
+
+/* Print accessibility */
+@media print {
+  .skip-links,
+  .tooltip-content,
+  .modal-overlay {
+    display: none !important;
+  }
+  
+  a[href]:after {
+    content: " (" attr(href) ")";
+  }
+  
+  .high-contrast * {
+    background: white !important;
+    color: black !important;
+  }
+}
+
+/* ===== INTERNATIONALIZATION STYLES ===== */
+
+/* RTL Support */
+.rtl {
+  direction: rtl;
+  text-align: right;
+}
+
+.ltr {
+  direction: ltr;
+  text-align: left;
+}
+
+/* Directional utilities */
+.text-start {
+  text-align: var(--text-align-start, left);
+}
+
+.text-end {
+  text-align: var(--text-align-end, right);
+}
+
+.ms-auto {
+  margin-inline-start: auto;
+}
+
+.me-auto {
+  margin-inline-end: auto;
+}
+
+.ps-2 {
+  padding-inline-start: 0.5rem;
+}
+
+.pe-2 {
+  padding-inline-end: 0.5rem;
+}
+
+.ps-3 {
+  padding-inline-start: 0.75rem;
+}
+
+.pe-3 {
+  padding-inline-end: 0.75rem;
+}
+
+.ps-4 {
+  padding-inline-start: 1rem;
+}
+
+.pe-4 {
+  padding-inline-end: 1rem;
+}
+
+.ms-2 {
+  margin-inline-start: 0.5rem;
+}
+
+.me-2 {
+  margin-inline-end: 0.5rem;
+}
+
+.ms-3 {
+  margin-inline-start: 0.75rem;
+}
+
+.me-3 {
+  margin-inline-end: 0.75rem;
+}
+
+.ms-4 {
+  margin-inline-start: 1rem;
+}
+
+.me-4 {
+  margin-inline-end: 1rem;
+}
+
+/* RTL-specific adjustments */
+.rtl .flex-row {
+  flex-direction: row-reverse;
+}
+
+.rtl .space-x-2 > * + * {
+  margin-left: 0;
+  margin-right: 0.5rem;
+}
+
+.rtl .space-x-3 > * + * {
+  margin-left: 0;
+  margin-right: 0.75rem;
+}
+
+.rtl .space-x-4 > * + * {
+  margin-left: 0;
+  margin-right: 1rem;
+}
+
+/* RTL form elements */
+.rtl input,
+.rtl select,
+.rtl textarea {
+  text-align: right;
+}
+
+.rtl input[type="number"] {
+  text-align: left; /* Numbers should remain LTR */
+}
+
+/* RTL navigation */
+.rtl .breadcrumb-separator {
+  transform: scaleX(-1);
+}
+
+.rtl .dropdown-menu {
+  left: auto;
+  right: 0;
+}
+
+/* RTL icons */
+.rtl .fa-chevron-left::before {
+  content: "\f054"; /* chevron-right */
+}
+
+.rtl .fa-chevron-right::before {
+  content: "\f053"; /* chevron-left */
+}
+
+.rtl .fa-arrow-left::before {
+  content: "\f061"; /* arrow-right */
+}
+
+.rtl .fa-arrow-right::before {
+  content: "\f060"; /* arrow-left */
+}
+
+/* Locale selector */
+.locale-selector {
+  display: flex;
+  align-items: center;
+}
+
+.locale-selector select {
+  min-width: 120px;
+  padding: 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  background-color: white;
+  font-size: 0.875rem;
+}
+
+.locale-selector select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.locale-selector .loading-indicator {
+  display: flex;
+  align-items: center;
+  color: #6b7280;
+}
+
+/* Language-specific font adjustments */
+[lang="ar"],
+[lang="ar-SA"] {
+  font-family: 'Noto Sans Arabic', 'Arial Unicode MS', sans-serif;
+}
+
+[lang="he"],
+[lang="he-IL"] {
+  font-family: 'Noto Sans Hebrew', 'Arial Unicode MS', sans-serif;
+}
+
+[lang="ja"],
+[lang="ja-JP"] {
+  font-family: 'Noto Sans JP', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+}
+
+[lang="zh"],
+[lang="zh-CN"],
+[lang="zh-TW"] {
+  font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+/* Number and date formatting */
+.formatted-number {
+  font-variant-numeric: tabular-nums;
+}
+
+.formatted-currency {
+  font-variant-numeric: tabular-nums;
+}
+
+.formatted-date {
+  white-space: nowrap;
+}
+
+/* Responsive RTL adjustments */
+@media (max-width: 768px) {
+  .rtl .mobile-menu {
+    right: 0;
+    left: auto;
+  }
+  
+  .rtl .mobile-menu-overlay {
+    animation: slideInRight 0.3s ease-out;
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.rtl .slide-in-left {
+  animation: slideInRight 0.3s ease-out;
+}
+
+.rtl .slide-in-right {
+  animation: slideInLeft 0.3s ease-out;
+}
+
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-gray-200;
+  }
+  
+  body {
+    @apply font-sans text-text bg-white;
+  }
+}
+
+/* Markdown [btn:Label](url) — class set server-side on contentHtml + client markdown fallback.
+   Plain CSS so Tailwind purge never drops it inside dangerouslySetInnerHTML. */
+.prose a.giip-md-btn,
+a.giip-md-btn {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  background-color: #1b5e20 !important;
+  color: #fff !important;
+  font-weight: 600;
+  text-decoration: none !important;
+  margin-bottom: 0.5rem;
+  margin-right: 0;
+  text-align: center;
+  white-space: normal;
+  line-height: 1.4;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.prose a.giip-md-btn:hover,
+a.giip-md-btn:hover {
+  background-color: #0b4d3e !important;
+  color: #fff !important;
+  text-decoration: none !important;
+}
+
+@media (min-width: 640px) {
+  .prose a.giip-md-btn,
+  a.giip-md-btn {
+    width: auto;
+    max-width: none;
+    margin-bottom: 0;
+    margin-right: 0.5rem;
+    white-space: nowrap;
+  }
+}
+
+/* Mobile core font styles - following Archibucks standards */
+@media (max-width: 768px) {
+  /* Global font settings */
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif !important;
+    font-size: 16px !important; /* Base font size - consistent with Archibucks */
+    line-height: 1.6 !important; /* Line spacing - following Archibucks comfortable reading settings */
+  }
+
+  .mobile-menu-btn {
+    font-size: 20px !important; /* Proportional to 16px menu text */
+  }
+
+  /* Mobile menu navigation links - compact spacing for menu items */
+  .nav-links {
+    font-size: 16px !important;
+  }
+
+  /* Mobile menu items - using compact line-height for menu items only */
+  .nav-links li a {
+    font-size: 16px !important;
+    line-height: 11.2px !important; /* Compact line height for menu items as per HTML design */
+  }
+
+  /* Ensure mobile menu is properly displayed */
+  .nav-links.md\:hidden {
+    display: flex !important;
+  }
+
+  /* Regular body text should use normal line-height */
+  p, span, div:not(.nav-links):not(.nav-links *) {
+    line-height: 1.6 !important;
+  }
+}

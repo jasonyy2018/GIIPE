@@ -1,0 +1,279 @@
+# Docker Compose file for production deployment
+# Note: version field is deprecated in newer Docker Compose versions
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: conference-postgres-prod
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-conference_db}
+      POSTGRES_USER: ${POSTGRES_USER:-conference_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/prisma/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - conference_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-conference_user} -d ${POSTGRES_DB:-conference_db}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: conference-redis-prod
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    command: >
+      sh -c "
+      if [ -z \"$$REDIS_PASSWORD\" ]; then
+        redis-server /etc/redis/redis.conf
+      else
+        redis-server /etc/redis/redis.conf --requirepass \"$$REDIS_PASSWORD\"
+      fi
+      "
+    volumes:
+      - redis_data:/data
+      - ./redis/redis.conf:/etc/redis/redis.conf:ro
+    networks:
+      - conference_network
+    healthcheck:
+      test: ["CMD", "sh", "-c", "if [ -z \"$$REDIS_PASSWORD\" ]; then redis-cli ping | grep -q PONG; else redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG; fi"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    image: conference-backend:latest
+    container_name: conference-backend-prod
+    restart: unless-stopped
+    # Run as root initially to fix permissions, then switch to nestjs user
+    # This is handled by the entrypoint script
+    user: "0:0"
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-conference_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-conference_db}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      CSRF_SECRET: ${CSRF_SECRET}
+      EMAIL_HOST: ${EMAIL_HOST}
+      EMAIL_PORT: ${EMAIL_PORT}
+      EMAIL_USER: ${EMAIL_USER}
+      EMAIL_PASS: ${EMAIL_PASS}
+      EMAIL_FROM: ${EMAIL_FROM}
+      # AWS S3 storage disabled - using local storage only
+      # AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      # AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      # AWS_REGION: ${AWS_REGION}
+      # AWS_S3_BUCKET: ${AWS_S3_BUCKET}
+      # Use local storage - files saved to ./uploads directory mapped to /app/uploads in container
+      STORAGE_TYPE: local
+      UPLOAD_PATH: /app/uploads
+      UPLOAD_MAX_SIZE: ${UPLOAD_MAX_SIZE:-10485760}
+      RATE_LIMIT_WINDOW: ${RATE_LIMIT_WINDOW:-900000}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      PORT: 3001
+      # Payment env vars (PAYMENT_RSA_*, PAYMENT_DES_KEY, etc.) are passed
+      # through env_file ONLY — NOT listed here — because RSA keys contain
+      # special chars ($, /, +, =) that Docker Compose YAML interpolation corrupts.
+      FRONTEND_URL: ${NEXT_PUBLIC_SITE_URL:-https://www.giip.info}
+      BACKEND_PUBLIC_URL: ${NEXT_PUBLIC_SITE_URL:-https://www.giip.info}
+    volumes:
+      # Local storage: uploads directory mapped to container
+      # Server local: ./uploads -> Container: /app/uploads
+      # Uploaded files are saved here and accessible via Nginx
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+    networks:
+      - conference_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "sh", "-c", "curl -f http://localhost:3001/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    image: conference-frontend:latest
+    container_name: conference-frontend-prod
+    restart: always  # Changed from unless-stopped to always for better reliability
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost/api}
+      NEXT_PUBLIC_SITE_NAME: ${NEXT_PUBLIC_SITE_NAME:-Conference Platform}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-${NEXT_PUBLIC_SITE_URL:-http://localhost}}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      SERVER_API_URL: http://backend:3001
+      # Ensure all temp env vars point to a writable dir to avoid EACCES crashes (e.g. '/dev/shmlet', '/app/let')
+      TMPDIR: /app/.tmp/
+      TMP: /app/.tmp/
+      TEMP: /app/.tmp/
+    ports:
+      # Bind ONLY to loopback — not 0.0.0.0. Prevents random internet scanners hitting Next directly.
+      # Host: curl http://127.0.0.1:3000/ still works. Public traffic should use NPM/nginx only.
+      # If Nginx Proxy Manager runs in another compose stack and used http://YOUR_PUBLIC_IP:3000,
+      # add this project network as "external" to NPM and forward to http://conference-frontend-prod:3000
+      # (or http://frontend:3000 when sharing the conference_network).
+      - "127.0.0.1:3000:3000"
+    volumes:
+      # Map frontend/public directory to server local
+      # Server local: ./frontend/public -> Container: /app/public
+      - ./frontend/public:/app/public
+    networks:
+      - conference_network
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      # Use dedicated health check endpoint for more reliable checks
+      # Fallback to process check if HTTP fails
+      # Note: curl may not be available in Alpine, so we rely on wget and process check
+      test: ["CMD", "sh", "-c", "if wget --no-verbose --tries=1 --spider --timeout=5 http://127.0.0.1:3000/api/health 2>&1 | grep -qE '200|saved|HTTP'; then exit 0; elif pgrep -f 'node server.js' >/dev/null; then exit 0; else exit 1; fi"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 300s  # 5 minutes startup grace period
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 3G  # Increased from 2G to 3G to prevent OOM kills
+        reservations:
+          cpus: '1'
+          memory: 1.5G  # Increased from 1G to 1.5G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: conference-nginx-prod
+    restart: unless-stopped
+    ports:
+      - "8085:80"
+      - "8443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      # Local storage: nginx serves uploaded files from this directory (read-only)
+      # Server local: ./uploads -> Container: /var/www/uploads
+      # Files accessible via http://domain/uploads/...
+      - ./uploads:/var/www/uploads:ro
+      - ./logs/nginx:/var/log/nginx
+      - nginx_cache:/var/cache/nginx
+    networks:
+      - conference_network
+    depends_on:
+      frontend:
+        condition: service_started
+      backend:
+        condition: service_healthy
+    # Note: Using service_started instead of service_healthy for frontend
+    # to allow Nginx to start even if frontend health check is still running
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "--timeout=5", "http://127.0.0.1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  nginx_cache:
+    driver: local
+
+networks:
+  conference_network:
+    # Fixed name for NPM/other stacks: external: true, name: giipe_conference_network
+    name: giipe_conference_network
+    driver: bridge

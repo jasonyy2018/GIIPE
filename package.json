@@ -1,0 +1,14 @@
+{
+  "name": "giipe-project",
+  "version": "1.0.0",
+  "description": "GIIPE Conference Management Platform",
+  "scripts": {
+    "diagnose": "node diagnose.js",
+    "diagnose:quick": "node diagnose.js",
+    "analyze-log": "node analyze-log.js"
+  },
+  "dependencies": {
+    "form-data": "^4.0.4",
+    "node-fetch": "^3.3.2"
+  }
+}

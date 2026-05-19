@@ -1,0 +1,419 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  EDITOR
+  MEMBER
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+  COMPLETED
+}
+
+enum OrderStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum RegistrationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  WAITLISTED
+}
+
+enum CommentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  FLAGGED
+}
+
+enum CommentTargetType {
+  EVENT
+  NEWS
+  SUBMISSION
+}
+
+enum SubmissionStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  ACCEPTED
+  REJECTED
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum NotificationType {
+  REGISTRATION_CONFIRMATION
+  SUBMISSION_STATUS
+  COMMENT_APPROVED
+  COMMENT_REJECTED
+  EVENT_REMINDER
+  SYSTEM_ANNOUNCEMENT
+}
+
+enum ReportReason {
+  SPAM
+  INAPPROPRIATE
+  HARASSMENT
+  HATE_SPEECH
+  MISINFORMATION
+  OTHER
+}
+
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  email     String   @unique
+  password  String
+  role      UserRole @default(MEMBER)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Profile information
+  firstName    String?
+  lastName     String?
+  organization String?
+  phone        String?
+  bio          String?
+  avatar       String?
+
+  // Email verification
+  emailVerified            Boolean   @default(false)
+  emailVerificationToken   String?
+  emailVerificationExpires DateTime?
+
+  // Password reset
+  passwordResetToken   String?
+  passwordResetExpires DateTime?
+  mustChangePassword   Boolean   @default(false) // Force password change on next login
+
+  // Relations
+  events            Event[]
+  news              News[]
+  registrations     Registration[]
+  orders            Order[]
+  comments          Comment[]
+  moderatedComments Comment[]       @relation("CommentModerator")
+  commentReports    CommentReport[]
+  submissions       Submission[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+  securityEvents    SecurityEvent[]
+
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+model Event {
+  id                   String      @id @default(cuid())
+  title                String
+  description          String?
+  contentMarkdown      String?
+  contentHtml          String?
+  featuredImage        String? // First image from content as featured image
+  pdfAttachment        String? // PDF attachment file path
+  pdfAttachmentName    String? // Original PDF file name
+  showPdfAttachment    Boolean  @default(true) // Whether PDF module is shown on public event page
+  submitUrl            String? // URL for submit button (e.g., submission form link)
+  honorableGuests      Json? // Array of honorable guest objects: [{photoUrl, name, title}]
+  startDate            DateTime
+  endDate              DateTime
+  location             String?
+  maxAttendees         Int?
+  registrationDeadline DateTime?
+  price                Int? // Price in cents
+  // Task List:
+  // - [x] Fix CSRF / 403 / 401 issues
+  // - [x] Make payment public (no login required)
+  // - [x] Fix 500 error on Events API (Object prototype bug)
+  // - [x] Fix Prisma date filter bug
+  isPaymentEnabled     Boolean     @default(false)
+  status               EventStatus @default(DRAFT)
+  tags                 String[]
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  // Relations
+  createdBy     String
+  creator       User           @relation(fields: [createdBy], references: [id])
+  registrations Registration[]
+  orders        Order[]
+  submissions   Submission[]
+
+  @@index([status])
+  @@index([startDate])
+  @@index([createdBy])
+  @@map("events")
+}
+
+model Order {
+  id              String      @id @default(cuid()) // Mapped to journo
+  amount          Int // Price in cents (支付金额)
+  status          OrderStatus @default(PENDING)
+  platformOrderNo String? // 平台订单号 (gateway businessorderno)
+  payType         String? // 01-支付宝, 02-微信支付 etc
+  payTime         DateTime?
+  feeCents        Int?    // 手续费，单位分 (gateway poundage)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  userId  String?
+  user    User?   @relation(fields: [userId], references: [id])
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id])
+
+  @@index([userId])
+  @@index([eventId])
+  @@index([status])
+  @@map("orders")
+}
+
+model Registration {
+  id             String             @id @default(cuid())
+  status         RegistrationStatus @default(PENDING)
+  registeredAt   DateTime           @default(now())
+  additionalInfo Json?
+
+  // Relations
+  userId  String
+  user    User   @relation(fields: [userId], references: [id])
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id])
+
+  @@unique([userId, eventId])
+  @@map("registrations")
+}
+
+model Comment {
+  id             String            @id @default(cuid())
+  content        String
+  status         CommentStatus     @default(PENDING)
+  targetType     CommentTargetType
+  targetId       String
+  sensitiveFlags String[]
+  parentId       String? // For threaded comments
+  moderationNote String? // Admin note for moderation decision
+  moderatedBy    String? // Admin who moderated this comment
+  moderatedAt    DateTime? // When the comment was moderated
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  // Relations
+  userId    String
+  user      User            @relation(fields: [userId], references: [id])
+  moderator User?           @relation("CommentModerator", fields: [moderatedBy], references: [id])
+  parent    Comment?        @relation("CommentReplies", fields: [parentId], references: [id])
+  replies   Comment[]       @relation("CommentReplies")
+  reports   CommentReport[]
+
+  @@index([targetType, targetId])
+  @@index([status])
+  @@index([userId])
+  @@index([moderatedBy])
+  @@map("comments")
+}
+
+model Submission {
+  id          String           @id @default(cuid())
+  title       String
+  description String?
+  filePath    String?
+  fileName    String?
+  fileSize    Int?
+  status      SubmissionStatus @default(DRAFT)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // Relations
+  userId  String
+  user    User   @relation(fields: [userId], references: [id])
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id])
+
+  @@map("submissions")
+}
+
+model SensitiveWord {
+  id        String   @id @default(cuid())
+  word      String   @unique
+  level     Int      @default(1) // 1-5 severity levels
+  category  String   @default("general")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@map("sensitive_words")
+}
+
+model Notification {
+  id        String             @id @default(cuid())
+  to        String // Email address or user identifier
+  type      String // EMAIL, IN_APP, etc.
+  template  String // Template name/key
+  status    NotificationStatus @default(PENDING)
+  sentAt    DateTime?
+  variables Json? // Template variables for personalization
+  metadata  Json? // Additional metadata (messageId, error details, etc.)
+  createdAt DateTime           @default(now())
+
+  // Relations
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  @@index([status])
+  @@index([userId])
+  @@index([template])
+  @@map("notifications")
+}
+
+model News {
+  id                String      @id @default(cuid())
+  title             String
+  description       String?
+  contentMarkdown   String?
+  contentHtml       String?
+  featuredImage     String? // First image from content as featured image
+  pdfAttachment     String? // PDF attachment file path
+  pdfAttachmentName String? // Original PDF file name
+  status            EventStatus @default(DRAFT) // Reusing EventStatus for consistency
+  tags              String[]
+  publishedAt       DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  // Relations
+  createdBy String
+  creator   User   @relation(fields: [createdBy], references: [id])
+
+  @@index([status])
+  @@index([publishedAt])
+  @@index([createdBy])
+  @@map("news")
+}
+
+model EmailTemplate {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  subject     String
+  htmlBody    String
+  textBody    String?
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("email_templates")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  resource   String
+  resourceId String?
+  details    Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  // Relations
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model CommentReport {
+  id          String       @id @default(cuid())
+  reason      ReportReason
+  description String?
+  createdAt   DateTime     @default(now())
+
+  // Relations
+  commentId  String
+  comment    Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  reportedBy String
+  reporter   User    @relation(fields: [reportedBy], references: [id])
+
+  @@unique([commentId, reportedBy]) // Prevent duplicate reports from same user
+  @@index([commentId])
+  @@index([reportedBy])
+  @@map("comment_reports")
+}
+
+model SystemSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+model SecurityEvent {
+  id             String    @id @default(cuid())
+  eventType      String
+  severity       String // 'low', 'medium', 'high', 'critical'
+  description    String
+  ipAddress      String?
+  userAgent      String?
+  details        Json?
+  resolved       Boolean   @default(false)
+  resolvedAt     DateTime?
+  resolutionNote String?
+  createdAt      DateTime  @default(now())
+
+  // Relations
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  @@index([eventType])
+  @@index([severity])
+  @@index([resolved])
+  @@index([createdAt])
+  @@index([ipAddress])
+  @@map("security_events")
+}
+
+model BlockedIP {
+  id          String    @id @default(cuid())
+  ipAddress   String    @unique
+  reason      String
+  isActive    Boolean   @default(true)
+  expiresAt   DateTime?
+  unblockedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([ipAddress])
+  @@index([isActive])
+  @@index([expiresAt])
+  @@map("blocked_ips")
+}

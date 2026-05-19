@@ -1,0 +1,77 @@
+# Multi-stage build for production
+# Override when server cannot reach Docker Hub: --build-arg NODE_IMAGE=docker.m.daocloud.io/library/node:22-alpine
+ARG NODE_IMAGE=node:22-alpine
+FROM ${NODE_IMAGE} AS builder
+
+WORKDIR /app
+
+# Install pnpm
+RUN npm install -g pnpm
+
+# Copy package files, lockfile, pnpm config, and prisma schema
+COPY package.json pnpm-lock.yaml .npmrc ./
+COPY prisma ./prisma/
+
+# Install dependencies using pnpm with retry-friendly config
+RUN pnpm config set fetch-retries 3 && \
+    pnpm config set fetch-retry-mintimeout 20000 && \
+    pnpm config set fetch-retry-maxtimeout 60000 && \
+    pnpm config set fetch-timeout 120000 && \
+    (pnpm install --frozen-lockfile || \
+        (echo "Warning: lockfile out of sync, running pnpm install..." && \
+        pnpm install))
+
+# Copy source code
+COPY . .
+
+# Generate Prisma client
+RUN pnpm prisma generate
+
+# Build the application
+RUN pnpm run build
+
+# Production stage
+ARG NODE_IMAGE=node:22-alpine
+FROM ${NODE_IMAGE} AS production
+
+# Install dumb-init, su-exec (for user switching), and OpenSSL for Prisma
+# Add PostgreSQL client tools for pg_dump (site backup export)
+RUN apk add --no-cache dumb-init su-exec curl openssl postgresql-client
+
+# Create app user
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nestjs -u 1001
+
+WORKDIR /app
+
+# Install pnpm
+RUN npm install -g pnpm
+
+# Copy built application, node_modules (with generated Prisma client), and configs from builder
+COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
+COPY --from=builder --chown=nestjs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=nestjs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nestjs:nodejs /app/package.json /app/pnpm-lock.yaml /app/.npmrc ./
+COPY --from=builder --chown=nestjs:nodejs /app/scripts ./scripts
+
+# Prune dev dependencies to reduce image size (keeps Prisma client intact)
+RUN pnpm prune --prod
+
+# Create necessary directories
+RUN mkdir -p /app/uploads /app/logs /app/scripts /app/.tmp && chown -R nestjs:nodejs /app/uploads /app/logs /app/scripts /app/.tmp
+
+# Copy entrypoint script
+COPY --chown=nestjs:nodejs scripts/docker-entrypoint.sh /app/scripts/docker-entrypoint.sh
+RUN chmod +x /app/scripts/docker-entrypoint.sh
+
+# Switch to non-root user
+USER nestjs
+
+EXPOSE 3001
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD curl -f http://localhost:3001/health || exit 1
+
+# Start the application with entrypoint script
+ENTRYPOINT ["dumb-init", "--", "/app/scripts/docker-entrypoint.sh"]
+CMD ["node", "dist/main.js"]

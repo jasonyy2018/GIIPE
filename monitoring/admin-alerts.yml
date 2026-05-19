@@ -1,0 +1,256 @@
+# Prometheus Alert Rules for Admin Interface Monitoring
+
+groups:
+  - name: admin_interface_alerts
+    rules:
+      # High-level system alerts
+      - alert: AdminInterfaceDown
+        expr: up{job="admin-interface"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: admin-interface
+        annotations:
+          summary: "Admin interface is down"
+          description: "The admin interface has been down for more than 1 minute"
+
+      - alert: AdminAPIHighLatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="admin-api"}[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          component: admin-api
+        annotations:
+          summary: "Admin API high latency"
+          description: "95th percentile latency is {{ $value }}s for admin API requests"
+
+      - alert: AdminAPIHighErrorRate
+        expr: rate(http_requests_total{job="admin-api",status=~"5.."}[5m]) / rate(http_requests_total{job="admin-api"}[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          component: admin-api
+        annotations:
+          summary: "Admin API high error rate"
+          description: "Error rate is {{ $value | humanizePercentage }} for admin API"
+
+      # Database performance alerts
+      - alert: AdminDatabaseSlowQueries
+        expr: rate(postgres_slow_queries_total{database="conference_management"}[5m]) > 10
+        for: 3m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "High number of slow database queries"
+          description: "{{ $value }} slow queries per second detected in admin operations"
+
+      - alert: AdminDatabaseConnectionsHigh
+        expr: postgres_connections_active{database="conference_management"} / postgres_connections_max > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Database connection pool nearly exhausted"
+          description: "{{ $value | humanizePercentage }} of database connections are in use"
+
+      # WebSocket alerts
+      - alert: AdminWebSocketConnectionsHigh
+        expr: websocket_connections_active{service="admin"} > 100
+        for: 5m
+        labels:
+          severity: warning
+          component: websocket
+        annotations:
+          summary: "High number of admin WebSocket connections"
+          description: "{{ $value }} active admin WebSocket connections"
+
+      - alert: AdminWebSocketMessageQueueHigh
+        expr: websocket_message_queue_size{service="admin"} > 1000
+        for: 2m
+        labels:
+          severity: warning
+          component: websocket
+        annotations:
+          summary: "WebSocket message queue is backing up"
+          description: "{{ $value }} messages queued for admin WebSocket delivery"
+
+      # Security alerts
+      - alert: AdminFailedLoginAttempts
+        expr: rate(admin_failed_login_attempts_total[5m]) > 5
+        for: 1m
+        labels:
+          severity: warning
+          component: security
+        annotations:
+          summary: "High rate of failed admin login attempts"
+          description: "{{ $value }} failed admin login attempts per second"
+
+      - alert: AdminSuspiciousActivity
+        expr: rate(admin_suspicious_activity_total[10m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          component: security
+        annotations:
+          summary: "Suspicious admin activity detected"
+          description: "Suspicious activity detected in admin interface"
+
+      - alert: AdminUnauthorizedAccess
+        expr: rate(admin_unauthorized_access_total[5m]) > 1
+        for: 1m
+        labels:
+          severity: critical
+          component: security
+        annotations:
+          summary: "Unauthorized admin access attempts"
+          description: "{{ $value }} unauthorized access attempts per second to admin interface"
+
+      # Performance alerts
+      - alert: AdminMemoryUsageHigh
+        expr: process_resident_memory_bytes{job="admin-api"} / 1024 / 1024 / 1024 > 2
+        for: 10m
+        labels:
+          severity: warning
+          component: performance
+        annotations:
+          summary: "Admin API memory usage is high"
+          description: "Admin API is using {{ $value }}GB of memory"
+
+      - alert: AdminCPUUsageHigh
+        expr: rate(process_cpu_seconds_total{job="admin-api"}[5m]) * 100 > 80
+        for: 10m
+        labels:
+          severity: warning
+          component: performance
+        annotations:
+          summary: "Admin API CPU usage is high"
+          description: "Admin API CPU usage is {{ $value }}%"
+
+      # Cache performance alerts
+      - alert: AdminCacheHitRateLow
+        expr: rate(cache_hits_total{service="admin"}[5m]) / (rate(cache_hits_total{service="admin"}[5m]) + rate(cache_misses_total{service="admin"}[5m])) < 0.7
+        for: 10m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Admin cache hit rate is low"
+          description: "Cache hit rate is {{ $value | humanizePercentage }} for admin operations"
+
+      - alert: AdminCacheConnectionFailed
+        expr: redis_up{service="admin-cache"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: cache
+        annotations:
+          summary: "Admin cache connection failed"
+          description: "Cannot connect to Redis cache for admin operations"
+
+      # Business logic alerts
+      - alert: AdminBulkOperationFailures
+        expr: rate(admin_bulk_operation_failures_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: bulk-operations
+        annotations:
+          summary: "High rate of bulk operation failures"
+          description: "{{ $value }} bulk operations failing per second"
+
+      - alert: AdminModerationQueueBacklog
+        expr: admin_moderation_queue_size > 1000
+        for: 30m
+        labels:
+          severity: warning
+          component: moderation
+        annotations:
+          summary: "Moderation queue backlog is high"
+          description: "{{ $value }} items pending moderation for more than 30 minutes"
+
+      - alert: AdminAnalyticsGenerationSlow
+        expr: histogram_quantile(0.95, rate(admin_analytics_generation_duration_seconds_bucket[10m])) > 30
+        for: 5m
+        labels:
+          severity: warning
+          component: analytics
+        annotations:
+          summary: "Analytics generation is slow"
+          description: "95th percentile analytics generation time is {{ $value }}s"
+
+      # Storage alerts
+      - alert: AdminFileUploadFailures
+        expr: rate(admin_file_upload_failures_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: storage
+        annotations:
+          summary: "High rate of file upload failures"
+          description: "{{ $value }} file uploads failing per second in admin interface"
+
+      - alert: AdminStorageSpaceLow
+        expr: (storage_free_bytes{service="admin"} / storage_total_bytes{service="admin"}) < 0.1
+        for: 5m
+        labels:
+          severity: critical
+          component: storage
+        annotations:
+          summary: "Admin storage space is low"
+          description: "Only {{ $value | humanizePercentage }} storage space remaining"
+
+      # Audit and compliance alerts
+      - alert: AdminAuditLogFailures
+        expr: rate(admin_audit_log_failures_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          component: audit
+        annotations:
+          summary: "Audit log failures detected"
+          description: "{{ $value }} audit log entries failed to be recorded per second"
+
+      - alert: AdminComplianceViolation
+        expr: admin_compliance_violations_total > 0
+        for: 0m
+        labels:
+          severity: critical
+          component: compliance
+        annotations:
+          summary: "Compliance violation detected"
+          description: "Compliance violation detected in admin operations"
+
+  - name: admin_interface_capacity
+    rules:
+      # Capacity planning alerts
+      - alert: AdminUserGrowthHigh
+        expr: rate(admin_total_users[24h]) > 100
+        for: 1h
+        labels:
+          severity: info
+          component: capacity
+        annotations:
+          summary: "High user growth rate"
+          description: "User growth rate is {{ $value }} users per day"
+
+      - alert: AdminEventGrowthHigh
+        expr: rate(admin_total_events[24h]) > 50
+        for: 1h
+        labels:
+          severity: info
+          component: capacity
+        annotations:
+          summary: "High event creation rate"
+          description: "Event creation rate is {{ $value }} events per day"
+
+      - alert: AdminDataVolumeGrowth
+        expr: rate(admin_database_size_bytes[24h]) > 1073741824  # 1GB per day
+        for: 6h
+        labels:
+          severity: info
+          component: capacity
+        annotations:
+          summary: "High database growth rate"
+          description: "Database is growing at {{ $value | humanize1024 }}B per day"

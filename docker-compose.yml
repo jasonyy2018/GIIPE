@@ -1,0 +1,96 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: conference_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: conference_db
+      POSTGRES_USER: conference_user
+      POSTGRES_PASSWORD: conference_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/prisma/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - conference_network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: conference_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - conference_network
+
+  # Backend API (NestJS)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: conference_backend
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://conference_user:conference_pass@postgres:5432/conference_db?schema=public
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=your-jwt-secret-key-here
+      - JWT_REFRESH_SECRET=your-jwt-refresh-secret-key-here
+      - FRONTEND_URL=http://localhost:3000
+      - UPLOAD_PATH=/app/uploads
+      - BASE_URL=http://localhost:3001
+      - STORAGE_TYPE=local
+      - MAX_FILE_SIZE=10485760
+      - ALLOWED_MIME_TYPES=application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,image/jpeg,image/png,image/gif,image/webp
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - ./uploads:/app/uploads
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - conference_network
+
+  # Frontend (Next.js)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: conference_frontend
+    restart: unless-stopped
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:3001
+      - SERVER_API_URL=http://conference_backend:3001
+      - NEXTAUTH_URL=http://localhost:3000
+      - NEXTAUTH_SECRET=your-secret-key-here
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+      # Map frontend/public directory to server local
+      - ./frontend/public:/app/public
+    depends_on:
+      - backend
+    networks:
+      - conference_network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  conference_network:
+    driver: bridge
