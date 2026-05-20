@@ -91,9 +91,9 @@ create_backup() {
     mkdir -p "$backup_path"
     
     # Backup database if running
-    if docker-compose -f "$PROJECT_ROOT/$COMPOSE_FILE" ps postgres | grep -q "Up"; then
+    if docker compose -f "$PROJECT_ROOT/$COMPOSE_FILE" ps postgres | grep -q "Up"; then
         log_info "Backing up database..."
-        docker-compose -f "$PROJECT_ROOT/$COMPOSE_FILE" exec -T postgres pg_dump \
+        docker compose -f "$PROJECT_ROOT/$COMPOSE_FILE" exec -T postgres pg_dump \
             -U "${POSTGRES_USER:-conference_user}" \
             -d "${POSTGRES_DB:-conference_platform}" \
             > "$backup_path/database.sql" || log_warning "Database backup failed"
@@ -147,11 +147,11 @@ deploy_services() {
     
     # Pull external images
     log_info "Pulling external images..."
-    docker-compose -f "$COMPOSE_FILE" pull postgres redis nginx
+    docker compose -f "$COMPOSE_FILE" pull postgres redis nginx
     
     # Start services with rolling update
     log_info "Starting services..."
-    docker-compose -f "$COMPOSE_FILE" up -d --remove-orphans
+    docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
     
     log_success "Services deployed"
 }
@@ -166,7 +166,7 @@ run_migrations() {
     log_info "Waiting for database to be ready..."
     timeout=60
     while [ $timeout -gt 0 ]; do
-        if docker-compose -f "$COMPOSE_FILE" exec -T postgres pg_isready -U "${POSTGRES_USER:-conference_user}" -d "${POSTGRES_DB:-conference_platform}" &> /dev/null; then
+        if docker compose -f "$COMPOSE_FILE" exec -T postgres pg_isready -U "${POSTGRES_USER:-conference_user}" -d "${POSTGRES_DB:-conference_platform}" &> /dev/null; then
             break
         fi
         sleep 2
@@ -180,7 +180,7 @@ run_migrations() {
     
     # Run Prisma migrations
     log_info "Running Prisma migrations..."
-    docker-compose -f "$COMPOSE_FILE" exec -T backend npx prisma migrate deploy
+    docker compose -f "$COMPOSE_FILE" exec -T backend npx prisma migrate deploy
     
     log_success "Migrations completed"
 }
@@ -195,9 +195,9 @@ health_check() {
     while [ $attempt -le $max_attempts ]; do
         log_info "Health check attempt $attempt/$max_attempts"
         
-        # Check backend health
-        if curl -f http://localhost/api/health &> /dev/null; then
-            log_success "Backend health check passed"
+        # Check health via Nginx (port 8085 per docker-compose.prod.yml)
+        if curl -f http://localhost:8085/api/health &> /dev/null; then
+            log_success "Health check passed"
             break
         fi
         
@@ -233,6 +233,11 @@ cleanup_docker() {
 main() {
     log_info "Starting deployment of Conference Management Platform"
     log_info "Timestamp: $(date)"
+
+    # Load env vars early so backup/migration use correct defaults
+    if [ -f "$PROJECT_ROOT/$ENV_FILE" ]; then
+      export $(grep -v '^#' "$PROJECT_ROOT/$ENV_FILE" | xargs)
+    fi
     
     check_prerequisites
     create_backup
@@ -248,7 +253,7 @@ main() {
     
     # Show running services
     log_info "Running services:"
-    docker-compose -f "$PROJECT_ROOT/$COMPOSE_FILE" ps
+    docker compose -f "$PROJECT_ROOT/$COMPOSE_FILE" ps
 }
 
 # Rollback function
@@ -270,14 +275,14 @@ rollback() {
     log_info "Restoring from backup: $backup_path"
     
     # Stop current services
-    docker-compose -f "$PROJECT_ROOT/$COMPOSE_FILE" down
+    docker compose -f "$PROJECT_ROOT/$COMPOSE_FILE" down
     
     # Restore database
     if [ -f "$backup_path/database.sql" ]; then
         log_info "Restoring database..."
-        docker-compose -f "$PROJECT_ROOT/$COMPOSE_FILE" up -d postgres
+        docker compose -f "$PROJECT_ROOT/$COMPOSE_FILE" up -d postgres
         sleep 10
-        docker-compose -f "$PROJECT_ROOT/$COMPOSE_FILE" exec -T postgres psql \
+        docker compose -f "$PROJECT_ROOT/$COMPOSE_FILE" exec -T postgres psql \
             -U "${POSTGRES_USER:-conference_user}" \
             -d "${POSTGRES_DB:-conference_platform}" \
             < "$backup_path/database.sql"
@@ -291,7 +296,7 @@ rollback() {
     fi
     
     # Restart services
-    docker-compose -f "$PROJECT_ROOT/$COMPOSE_FILE" up -d
+    docker compose -f "$PROJECT_ROOT/$COMPOSE_FILE" up -d
     
     log_success "Rollback completed"
 }
