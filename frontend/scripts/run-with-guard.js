@@ -144,5 +144,32 @@ process.on('unhandledRejection', function (reason) {
   console.error('unhandledRejection', reason);
 });
 
+// ---- Memory watchdog ----
+// If heap usage exceeds threshold, exit gracefully so Docker restarts us.
+var MEMORY_EXIT_THRESHOLD_MB = 1800; // exit when heap used >= 1.8GB (safety margin below 2GB --max-old-space-size)
+var MEMORY_CHECK_INTERVAL_MS = 15000; // check every 15s
+
+function startMemoryWatchdog() {
+  function check() {
+    try {
+      var usage = process.memoryUsage();
+      var heapUsedMB = Math.round(usage.heapUsed / 1024 / 1024);
+      if (heapUsedMB >= MEMORY_EXIT_THRESHOLD_MB) {
+        console.error(
+          '[Guard] Memory threshold exceeded: ' + heapUsedMB +
+          'MB >= ' + MEMORY_EXIT_THRESHOLD_MB + 'MB, exiting for restart'
+        );
+        process.exit(1);
+      }
+    } catch (e) {
+      // Silently ignore errors in memory check
+    }
+  }
+  setInterval(check, MEMORY_CHECK_INTERVAL_MS);
+  // Also check once shortly after startup
+  setTimeout(check, 5000);
+}
+
+startMemoryWatchdog();
 console.warn('[Guard] Active - *let paths redirected to ' + SAFE_LET + ', EACCES/EPERM suppressed');
 require(path.join(__dirname, '..', 'server.js'));

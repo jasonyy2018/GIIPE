@@ -1,23 +1,58 @@
 import { NextResponse } from 'next/server';
 
+const MEMORY_WARN_MB = 1536; // ~1.5GB, warn before 2GB Node limit
+const MEMORY_CRITICAL_MB = 1792; // ~1.75GB, return 503
+
+function getMemoryUsageMB(): number {
+  const usage = process.memoryUsage();
+  return Math.round(usage.heapUsed / 1024 / 1024);
+}
+
 /**
  * Health check endpoint for Docker and monitoring
- * Returns 200 OK if the server is healthy
+ * - Returns 200 if healthy
+ * - Returns 503 if memory is critically high or other checks fail
  */
 export async function GET() {
   try {
-    // Simple health check - just return OK
-    // You can add more checks here if needed (database, etc.)
+    const memoryMB = getMemoryUsageMB();
+    const checks: Record<string, unknown> = {
+      memory: { usedMB: memoryMB, heapTotalMB: Math.round(process.memoryUsage().heapTotal / 1024 / 1024) },
+    };
+
+    // Check backend connectivity
+    try {
+      const serverApiUrl = process.env.SERVER_API_URL || 'http://backend:3001';
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const backendRes = await fetch(`${serverApiUrl}/health`, {
+        signal: controller.signal,
+        cache: 'no-store',
+      });
+      clearTimeout(timeoutId);
+      checks.backend = { status: backendRes.ok ? 'ok' : 'error', code: backendRes.status };
+    } catch {
+      checks.backend = { status: 'unreachable' };
+    }
+
+    // Check memory thresholds
+    const healthy = memoryMB < MEMORY_CRITICAL_MB && checks.backend?.status !== 'error';
+    const statusCode = healthy ? 200 : 503;
+
+    if (memoryMB > MEMORY_WARN_MB) {
+      console.warn(`[Health] Memory warning: ${memoryMB}MB (threshold: ${MEMORY_WARN_MB}MB)`);
+    }
+
     return NextResponse.json(
       {
-        status: 'ok',
+        status: healthy ? 'ok' : 'degraded',
         timestamp: new Date().toISOString(),
         service: 'frontend',
+        checks,
       },
-      { status: 200 }
+      { status: statusCode }
     );
   } catch (error) {
-    // If there's an error, return 503 Service Unavailable
     return NextResponse.json(
       {
         status: 'error',
