@@ -118,9 +118,9 @@ export default function FeaturedContentClient({
         // Sort by startDate descending (newest first - dates from new to old)
         const [eventsRes, conferencesRes] = await Promise.all([
           // Upcoming Events: status=PUBLISHED only (like Past Events uses status=COMPLETED only)
-          fetchWithTimeout(`/api/events?status=PUBLISHED&limit=6&offset=0&sortBy=startDate&sortOrder=desc`),
+          fetchWithTimeout(`/api/events?status=PUBLISHED&limit=100&offset=0&sortBy=startDate&sortOrder=desc`),
           // Past Events: status=COMPLETED only (reference implementation for Upcoming Events)
-          fetchWithTimeout('/api/events?status=COMPLETED&limit=3&offset=0&sortBy=endDate&sortOrder=desc'),
+          fetchWithTimeout('/api/events?status=COMPLETED&limit=100&offset=0&sortBy=endDate&sortOrder=desc'),
         ]);
 
         // CRITICAL: Check if component is still mounted before updating state

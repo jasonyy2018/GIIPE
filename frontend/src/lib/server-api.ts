@@ -223,8 +223,8 @@ export async function getHomepageData() {
     // This ensures one failure doesn't block the other
     // Each function has 4s timeout, so both should complete or timeout within ~4s
     const [eventsResult, conferencesResult] = await Promise.allSettled([
-      getUpcomingEvents(6),
-      getPastConferences(3),
+      getUpcomingEvents(100),
+      getPastConferences(100),
     ]);
 
     const events = eventsResult.status === 'fulfilled' ? eventsResult.value : [];

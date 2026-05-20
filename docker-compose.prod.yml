@@ -195,12 +195,12 @@ services:
       backend:
         condition: service_healthy
     healthcheck:
-      # Use dedicated health check endpoint for more reliable checks
-      # Fallback to process check if HTTP fails
-      # Note: curl may not be available in Alpine, so we rely on wget and process check
-      test: ["CMD", "sh", "-c", "if wget --no-verbose --tries=1 --spider --timeout=5 http://127.0.0.1:3000/api/health 2>&1 | grep -qE '200|saved|HTTP'; then exit 0; elif pgrep -f 'node server.js' >/dev/null; then exit 0; else exit 1; fi"]
+      # Check homepage SSR AND API health; both must respond.
+      # Homepage SSR timeout 8s (matches internal SSR_TIMEOUT), API health 4s.
+      # If both HTTP checks fail, fall back to process check (avoids premature restart during transient slowness).
+      test: ["CMD", "sh", "-c", "if wget --no-verbose --tries=1 --timeout=8 -O /dev/null http://127.0.0.1:3000/ 2>&1 | grep -qE '200|saved|HTTP' && wget --no-verbose --tries=1 --spider --timeout=4 http://127.0.0.1:3000/api/health 2>&1 | grep -qE '200|saved|HTTP'; then exit 0; elif pgrep -f 'node server.js' >/dev/null; then exit 0; else exit 1; fi"]
       interval: 30s
-      timeout: 10s
+      timeout: 15s
       retries: 3
       start_period: 300s  # 5 minutes startup grace period
     deploy:

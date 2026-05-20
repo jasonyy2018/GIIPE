@@ -77,8 +77,8 @@ USER nextjs
 
 EXPOSE 3000
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD sh -c "if wget --no-verbose --tries=1 --spider --timeout=5 http://localhost:3000/api/health 2>&1 | grep -qE '200|saved|HTTP'; then exit 0; elif pgrep -f 'node' >/dev/null; then exit 0; else exit 1; fi"
+HEALTHCHECK --interval=30s --timeout=15s --start-period=90s --retries=3 \
+  CMD sh -c "if wget --no-verbose --tries=1 --timeout=8 -O /dev/null http://localhost:3000/ 2>&1 | grep -qE '200|saved|HTTP' && wget --no-verbose --tries=1 --spider --timeout=4 http://localhost:3000/api/health 2>&1 | grep -qE '200|saved|HTTP'; then exit 0; elif pgrep -f 'node' >/dev/null; then exit 0; else exit 1; fi"
 
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["sh", "-c", "export TMPDIR=/app/.tmp/ TMP=/app/.tmp/ TEMP=/app/.tmp/ && echo 'Starting Next.js server...' && node scripts/run-with-guard.js"]
