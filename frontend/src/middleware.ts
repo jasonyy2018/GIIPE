@@ -27,6 +27,7 @@ function isProbablyMalicious(req: NextRequest): boolean {
     /\b(curl|wget)\b.*\bhttp\b/, // download-and-exec style
     /\bstratum\+tcp\b/, // mining
     /\bcrontab\b|\bsystemctl\b|\bnohup\b/, // persistence hints
+    /returnnan/i, // block CVE-2025-55182 (React2Shell) probes
   ];
 
   if (patterns.some((re) => re.test(haystack))) return true;

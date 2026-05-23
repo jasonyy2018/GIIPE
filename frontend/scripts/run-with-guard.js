@@ -78,12 +78,21 @@ var origChmodSync = fs.chmodSync;
 if (typeof origChmod === 'function') {
   fs.chmod = function (pathArg, mode, callback) {
     if (typeof mode === 'function') { callback = mode; mode = undefined; }
+    if (isLetPath(pathArg)) {
+      if (typeof callback === 'function') {
+        process.nextTick(callback);
+      }
+      return;
+    }
     pathArg = redirectLetPath(pathArg);
     return origChmod.call(fs, pathArg, mode, callback);
   };
 }
 if (typeof origChmodSync === 'function') {
   fs.chmodSync = function (pathArg, mode) {
+    if (isLetPath(pathArg)) {
+      return;
+    }
     pathArg = redirectLetPath(pathArg);
     return origChmodSync.call(fs, pathArg, mode);
   };
@@ -91,6 +100,9 @@ if (typeof origChmodSync === 'function') {
 if (fs.promises && typeof fs.promises.chmod === 'function') {
   var origPromisesChmod = fs.promises.chmod;
   fs.promises.chmod = function (pathArg, mode) {
+    if (isLetPath(pathArg)) {
+      return Promise.resolve();
+    }
     pathArg = redirectLetPath(pathArg);
     return origPromisesChmod.call(fs.promises, pathArg, mode);
   };
