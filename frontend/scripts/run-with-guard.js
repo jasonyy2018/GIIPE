@@ -119,6 +119,43 @@ function isLetPathError(err) {
   return (code === 'EACCES' || code === 'EPERM' || code === 'ENOENT') && (hasLet || giipTmp);
 }
 
+/**
+ * Benign network errors that should NEVER crash the process.
+ * These are transient TCP/socket events (client hung up, proxy timeout, etc.).
+ * Node.js HTTP server should handle these internally, but sometimes bubbles up
+ * as uncaughtException when a socket is in an unusual state.
+ *
+ * ECONNRESET: remote peer forcibly closed the connection (nginx timeout, browser close)
+ * EPIPE:      write to a socket that was already closed
+ * ECONNABORTED: connection aborted before response completed
+ * ETIMEDOUT:  TCP connection timed out waiting for data
+ */
+var BENIGN_NETWORK_CODES = {
+  ECONNRESET: true,
+  EPIPE: true,
+  ECONNABORTED: true,
+  ETIMEDOUT: true,
+};
+
+// Avoid log storms for network errors too
+var _lastNetErrLogAt = Object.create(null);
+var NET_LOG_INTERVAL_MS = 10000; // max 1 log per 10s per error code
+
+function isBenignNetworkError(err) {
+  if (!err || typeof err !== 'object') return false;
+  var code = err.code || (err.errno != null ? String(err.errno) : '');
+  return BENIGN_NETWORK_CODES[code] === true;
+}
+
+function shouldLogNetErr(code) {
+  var key = String(code || 'net');
+  var now = Date.now();
+  var last = _lastNetErrLogAt[key] || 0;
+  if (now - last < NET_LOG_INTERVAL_MS) return false;
+  _lastNetErrLogAt[key] = now;
+  return true;
+}
+
 // Avoid log storms: only emit a suppressed log once per key per interval.
 var _lastLetLogAt = Object.create(null);
 var LET_LOG_INTERVAL_MS = 5000;
@@ -146,19 +183,45 @@ function suppressOrExit(err, label) {
 }
 
 process.on('uncaughtException', function (err) {
+  // 1. Suppress known *let path permission errors (filesystem quirk in containers).
   if (suppressOrExit(err, 'uncaughtException')) return;
+
+  // 2. Suppress benign network errors: ECONNRESET, EPIPE, etc.
+  //    These happen when nginx/browser closes the TCP connection before Node finishes.
+  //    They are NOT application bugs — crashing on them causes unnecessary container restarts.
+  if (isBenignNetworkError(err)) {
+    var code = err.code || 'NET';
+    if (shouldLogNetErr(code)) {
+      console.warn('[Guard] Suppressed benign network uncaughtException:', code, err.message || '');
+    }
+    return; // Do NOT exit — let the server keep running
+  }
+
+  // 3. All other uncaught exceptions are real bugs — log and exit so Docker restarts us cleanly.
   console.error('uncaughtException', err);
   process.exit(1);
 });
 
 process.on('unhandledRejection', function (reason) {
+  // Suppress *let path errors in async context too
   if (suppressOrExit(reason, 'unhandledRejection')) return;
+
+  // Suppress benign network errors in promise context
+  if (isBenignNetworkError(reason)) {
+    var code = (reason && reason.code) || 'NET';
+    if (shouldLogNetErr(code + '_rejection')) {
+      console.warn('[Guard] Suppressed benign network unhandledRejection:', code,
+        (reason && reason.message) || '');
+    }
+    return;
+  }
+
   console.error('unhandledRejection', reason);
 });
 
 // ---- Memory watchdog ----
 // If heap usage exceeds threshold, exit gracefully so Docker restarts us.
-var MEMORY_EXIT_THRESHOLD_MB = 1800; // exit when heap used >= 1.8GB (safety margin below 2GB --max-old-space-size)
+var MEMORY_EXIT_THRESHOLD_MB = 2400; // exit when heap used >= 2.4GB (safety margin below 3GB container limit)
 var MEMORY_CHECK_INTERVAL_MS = 15000; // check every 15s
 
 function startMemoryWatchdog() {

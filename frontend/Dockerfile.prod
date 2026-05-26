@@ -70,7 +70,7 @@ RUN chown nextjs:nodejs /app/scripts/run-with-guard.js
 ENV TMPDIR=/app/.tmp/
 ENV TMP=/app/.tmp/
 ENV TEMP=/app/.tmp/
-ENV NODE_OPTIONS="--max-old-space-size=2048 --enable-source-maps"
+ENV NODE_OPTIONS="--max-old-space-size=2560 --enable-source-maps"
 
 # Switch to non-root user
 USER nextjs
