@@ -28,7 +28,7 @@ COPY . .
 RUN pnpm prisma generate
 
 # Build the application
-RUN pnpm run build
+RUN pnpm run build && ls -la /app && ls -la /app/dist
 
 # Production stage
 ARG NODE_IMAGE=node:22-alpine
